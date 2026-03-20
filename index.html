@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- 手机适配：禁止缩放，铺满屏幕 -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="format-detection" content="telephone=no">
+<!-- 微信/浏览器全屏体验 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="mobile-web-app-capable" content="yes">
+<!-- 微信分享卡片 OG 信息 -->
+<meta property="og:title" content="今日晚餐 🍚 — AI 帮你决定吃什么">
+<meta property="og:description" content="每天不一样的家常菜谱，荤素搭配，自动按人数算用量">
+<meta property="og:image" content="https://your-domain.com/share-cover.png">
+<meta property="og:type" content="website">
+<title>今日晚餐 🍚</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700;900&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+/* ── 全局变量 ── */
+:root{
+  --paper:#FEFAF3; --paper2:#FFF8EE; --paper3:#FFF3E0;
+  --ink:#2B1F0E;   --ink2:#5C4430;   --ink3:#A08060;
+  --rule:rgba(80,60,30,0.18);
+  --accent:#D85C2A; --green:#3A8C5C; --blue:#3B6FA8; --purple:#7B5EA7;
+  --shd:rgba(43,31,14,0.13);
+  /* iPhone 刘海/底部安全区 */
+  --sat: env(safe-area-inset-top,    0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+}
+
+*{ margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+html{ height:100%; }
+
+body{
+  background:var(--paper);
+  font-family:'Noto Sans SC','PingFang SC','Helvetica Neue',sans-serif;
+  color:var(--ink);
+  min-height:100%;
+  /* 底部留出固定栏高度 + 安全区 */
+  padding-bottom: calc(72px + var(--sab));
+  overscroll-behavior-y: none;
+}
+
+/* ── 顶部状态栏占位（iOS 全屏模式） ── */
+.status-bar-placeholder{
+  height: var(--sat);
+  background: var(--paper);
+}
+
+.app{ max-width:480px; margin:0 auto; }
+
+/* ── HEADER ── */
+.hdr{
+  padding: 20px 20px 0;
+  text-align: center;
+  position: relative;
+}
+.season-tag{
+  display:inline-flex; align-items:center; gap:5px;
+  background:var(--ink); color:var(--paper);
+  font-size:11px; letter-spacing:2px; font-weight:700;
+  padding:3px 14px; border-radius:20px;
+  margin-bottom:8px; transform:rotate(-1deg);
+}
+.big-title{
+  font-size: clamp(38px, 10vw, 48px);
+  font-weight:900; line-height:1; letter-spacing:-2px;
+  display:inline-block; padding:8px 0 6px;
+}
+.big-title em{ font-style:normal; color:var(--accent); }
+.date-line{ font-size:12px; color:var(--ink3); margin-top:4px; }
+
+/* ── EMOJI 游行 ── */
+.parade{ display:flex; justify-content:center; padding:8px 0 10px; }
+.ep{
+  font-size:22px; padding:0 5px; display:inline-block;
+  animation:bob 2.4s ease-in-out infinite; transform-origin:bottom center;
+}
+.ep:nth-child(2){animation-delay:.3s} .ep:nth-child(3){animation-delay:.6s}
+.ep:nth-child(4){animation-delay:.9s} .ep:nth-child(5){animation-delay:1.2s}
+.ep:nth-child(6){animation-delay:1.5s} .ep:nth-child(7){animation-delay:1.8s}
+@keyframes bob{
+  0%,100%{transform:translateY(0) rotate(-4deg)}
+  50%{transform:translateY(-5px) rotate(4deg)}
+}
+
+/* ── SKETCH 卡片 ── */
+.scard{
+  background:var(--paper2); border:2.5px solid var(--ink);
+  border-radius:20px 18px 22px 16px;
+  margin:0 14px 12px; padding:14px 16px;
+  box-shadow:5px 5px 0 var(--shd); position:relative;
+}
+.scard::before{
+  content:''; position:absolute; inset:3px;
+  border:1.5px dashed rgba(80,60,30,.1); border-radius:17px; pointer-events:none;
+}
+
+/* ── 人数控制 ── */
+.ctrl-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.ctrl-lbl{ font-size:15px; font-weight:700; color:var(--ink2); display:flex; align-items:center; gap:6px; }
+.spinner{
+  display:flex; align-items:center;
+  border:2px solid var(--ink); border-radius:12px; overflow:hidden;
+  background:var(--paper); box-shadow:3px 3px 0 var(--shd);
+}
+.sp-btn{
+  background:none; border:none;
+  width:44px; height:44px; font-size:24px;
+  cursor:pointer; font-weight:700; color:var(--ink);
+  display:flex; align-items:center; justify-content:center;
+  font-family:inherit;
+  /* 手机按压反馈 */
+  transition: background .1s;
+}
+.sp-btn:active{ background:rgba(43,31,14,.14); }
+.sp-num{
+  min-width:52px; text-align:center;
+  font-size:26px; font-weight:900; color:var(--accent);
+  border-left:1.5px dashed var(--rule); border-right:1.5px dashed var(--rule);
+  line-height:44px;
+}
+.ctrl-hint{ font-size:11px; color:var(--ink3); margin-top:8px; }
+.ctrl-hint b{ color:var(--accent); }
+
+/* ── 生成按钮 ── */
+.gen-btn{
+  width:calc(100% - 28px); margin:0 14px 16px;
+  display:flex; align-items:center; justify-content:center; gap:10px;
+  background:var(--ink); color:#fff; border:none;
+  border-radius:16px 18px 14px 16px;
+  /* 手机友好：更大点击区域 */
+  padding:16px 24px; font-size:18px;
+  font-family:'Noto Sans SC',sans-serif; font-weight:700;
+  cursor:pointer; letter-spacing:1px;
+  box-shadow:5px 5px 0 var(--shd);
+  transition:transform .1s, box-shadow .1s;
+  /* 防止双击放大 */
+  touch-action: manipulation;
+}
+.gen-btn:active{ transform:translate(2px,2px); box-shadow:3px 3px 0 var(--shd); }
+.gen-btn:disabled{ background:var(--ink3)!important; cursor:not-allowed; transform:none!important; box-shadow:none!important; }
+
+/* ── LOADING ── */
+.loading{ display:none; text-align:center; padding:44px 20px; }
+.load-ems{ display:flex; justify-content:center; gap:8px; margin-bottom:14px; }
+.le{ font-size:36px; display:inline-block; animation:spb 1.4s ease-in-out infinite; }
+.le:nth-child(2){animation-delay:.2s} .le:nth-child(3){animation-delay:.4s}
+@keyframes spb{
+  0%{transform:scale(.85) rotate(-10deg)} 50%{transform:scale(1.15) rotate(10deg)} 100%{transform:scale(.85) rotate(-10deg)}
+}
+.load-txt{ font-size:16px; color:var(--ink2); font-weight:700; animation:pulse 1.2s ease-in-out infinite alternate; }
+@keyframes pulse{ from{opacity:.5} to{opacity:1} }
+
+/* ── 菜单标题 ── */
+.menu-name{ font-size:22px; font-weight:900; color:var(--ink); padding:4px 18px 5px; }
+.meta-row{ display:flex; gap:5px; margin:0 18px 10px; flex-wrap:wrap; }
+.pill{ font-size:10px; font-weight:700; padding:2px 10px; border-radius:20px; border:1.5px solid currentColor; }
+.pa{color:var(--accent)} .pg{color:var(--green)} .pb{color:var(--blue)} .pp{color:var(--purple)}
+
+/* ── 菜品卡片 ── */
+.dish{
+  background:var(--paper2); border:2.5px solid var(--ink);
+  margin:8px 14px; border-radius:20px 18px 22px 16px;
+  overflow:hidden; box-shadow:5px 5px 0 var(--shd);
+}
+.dish:nth-child(2n){ transform:rotate(.3deg); }
+.dish:nth-child(3n){ transform:rotate(-.25deg); }
+
+.ebanner{
+  background:var(--paper3); border-bottom:2px dashed var(--rule);
+  display:flex; align-items:center; justify-content:center;
+  padding:14px 0 10px; position:relative;
+}
+.big-e{
+  font-size:62px; line-height:1; display:inline-block;
+  animation:gf 3s ease-in-out infinite;
+}
+@keyframes gf{
+  0%,100%{transform:translateY(0) rotate(-2deg) scale(1)}
+  50%{transform:translateY(-5px) rotate(2deg) scale(1.05)}
+}
+.dl,.dr{ position:absolute; top:8px; font-size:14px; opacity:.28; line-height:1.8; }
+.dl{left:10px} .dr{right:10px; text-align:right}
+
+.nbar{
+  padding:10px 14px 8px; border-bottom:2px dashed var(--rule);
+  display:flex; align-items:flex-start; justify-content:space-between; gap:8px;
+}
+.dname{ font-size:20px; font-weight:900; color:var(--ink); }
+.chips{ display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end; margin-top:3px; }
+.chip{ font-size:10px; font-weight:700; padding:2px 7px; border-radius:8px; white-space:nowrap; }
+.cm{background:rgba(201,64,64,.1);color:#A33030;border:1px solid #C94040}
+.cv{background:rgba(58,140,92,.1);color:#2A6840;border:1px solid #3A8C5C}
+.cs{background:rgba(59,111,168,.1);color:#2A4F82;border:1px solid #3B6FA8}
+.cc{background:rgba(201,144,26,.1);color:#7A5A10;border:1px solid #C9901A}
+.cx{background:rgba(43,31,14,.06);color:var(--ink3);border:1px solid var(--rule)}
+
+.ings{ padding:10px 14px; border-bottom:2px dashed var(--rule); }
+.shdr{ font-size:12px; font-weight:700; color:var(--ink2); margin-bottom:7px; display:flex; align-items:center; gap:5px; }
+.igrid{ display:grid; grid-template-columns:1fr 1fr; gap:3px 10px; }
+.irow{
+  display:flex; justify-content:space-between; align-items:center;
+  font-size:12px; padding:4px 0;
+  border-bottom:1px dotted rgba(80,60,30,.1); gap:4px;
+}
+.iname{ color:var(--ink2); flex:1; }
+.iamt{
+  color:var(--accent); font-weight:900; font-size:12px; flex-shrink:0;
+  background:rgba(216,92,42,.08); padding:1px 6px; border-radius:5px;
+}
+
+.steps{ padding:10px 14px 14px; }
+.srow{ display:flex; gap:8px; margin-bottom:8px; align-items:flex-start; }
+.snum{
+  width:20px; height:20px; flex-shrink:0;
+  background:var(--ink); color:var(--paper); border-radius:50%;
+  font-size:11px; font-weight:700;
+  display:flex; align-items:center; justify-content:center;
+  transform:rotate(-6deg); margin-top:2px;
+}
+.stxt{ font-size:13px; color:var(--ink2); line-height:1.65; flex:1; }
+.tip{
+  margin-top:9px; background:rgba(216,92,42,.06);
+  border:1.5px dashed var(--accent); border-radius:10px;
+  padding:9px 12px; font-size:12px; color:var(--accent);
+  display:flex; gap:6px; align-items:flex-start;
+}
+
+/* ── 底部固定操作栏 ── */
+.bottom-bar{
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  /* 安全区适配：iPhone X+ 底部橡皮筋 */
+  padding-bottom: var(--sab);
+  background: var(--paper);
+  border-top: 2px solid var(--ink);
+  box-shadow: 0 -4px 16px rgba(43,31,14,.1);
+  z-index: 100;
+}
+.bottom-bar-inner{
+  max-width:480px; margin:0 auto;
+  display:flex; gap:10px; padding:10px 14px;
+}
+.act{
+  flex:1; display:flex; align-items:center; justify-content:center; gap:6px;
+  border:2px solid var(--ink);
+  border-radius:14px 16px 12px 14px;
+  /* 更大点击区域 */
+  padding:13px 8px;
+  font-size:14px; font-family:'Noto Sans SC',sans-serif; font-weight:700;
+  cursor:pointer;
+  box-shadow:4px 4px 0 var(--shd);
+  transition:transform .1s, box-shadow .1s;
+  touch-action: manipulation;
+}
+.act:active{ transform:translate(2px,2px); box-shadow:2px 2px 0 var(--shd); }
+.a-share{ background:var(--green); color:#fff; border-color:var(--green); }
+.a-regen{ background:var(--paper2); color:var(--ink); }
+/* 菜谱未生成时底部栏隐藏 */
+.bottom-bar.hidden{ display:none; }
+
+/* ── 全屏截图遮罩 ── */
+.share-overlay{
+  display:none; position:fixed; inset:0; z-index:200;
+  background:rgba(43,31,14,.7);
+  flex-direction:column; align-items:center; justify-content:center; gap:16px;
+}
+.share-overlay.show{ display:flex; }
+.share-overlay-txt{ color:#fff; font-size:16px; font-weight:700; }
+.share-spinner{
+  width:48px; height:48px;
+  border:4px solid rgba(255,255,255,.3);
+  border-top-color:#fff;
+  border-radius:50%;
+  animation:spin .8s linear infinite;
+}
+@keyframes spin{ to{transform:rotate(360deg)} }
+
+/* ── 错误框 ── */
+.errbox{
+  display:none; margin:10px 14px; padding:13px 15px;
+  border:2px dashed #C94040; border-radius:14px;
+  background:rgba(201,64,64,.05);
+  text-align:center; font-size:13px; color:#A33030; line-height:1.7;
+}
+
+/* ── Toast ── */
+.toast-el{
+  position:fixed; bottom:calc(80px + var(--sab)); left:50%;
+  transform:translateX(-50%);
+  background:var(--ink); color:var(--paper);
+  padding:9px 20px; border-radius:24px;
+  font-size:13px; font-weight:700;
+  opacity:0; pointer-events:none; transition:opacity .3s;
+  z-index:300; white-space:nowrap;
+  max-width:80vw; text-align:center;
+}
+.toast-el.on{ opacity:1; }
+
+/* ── 截图专用隐藏元素（不显示在页面，只截图用） ── */
+.share-card-wrap{
+  position:fixed; left:-9999px; top:0;
+  width:375px; background:var(--paper); padding:20px 0 24px;
+}
+</style>
+</head>
+<body>
+
+<div class="status-bar-placeholder"></div>
+
+<div class="app" id="app">
+  <!-- HEADER -->
+  <div class="hdr">
+    <div class="season-tag" id="stag">🌸 春季</div><br />
+    <div class="big-title">今日<em>晚餐</em></div>
+    <div class="date-line" id="dline"></div>
+  </div>
+
+  <!-- 波浪线 -->
+  <svg style="width:100%;height:20px;margin:10px 0 0;display:block" viewBox="0 0 460 20" preserveAspectRatio="none">
+    <path d="M0 10 C40 2 80 18 120 10 C160 2 200 18 240 10 C280 2 320 18 360 10 C400 2 440 18 460 10"
+      stroke="rgba(80,60,30,0.18)" stroke-width="2" fill="none"/>
+  </svg>
+
+  <!-- Emoji 游行 -->
+  <div class="parade" id="parade">
+    <span class="ep">🌱</span><span class="ep">🌸</span><span class="ep">🫛</span>
+    <span class="ep">🥬</span><span class="ep">🌿</span><span class="ep">🍳</span><span class="ep">🍚</span>
+  </div>
+
+  <!-- 人数选择 -->
+  <div class="scard">
+    <div class="ctrl-row">
+      <div class="ctrl-lbl"><span style="font-size:20px">👨‍👩‍👧</span>今晚几个人？</div>
+      <div class="spinner">
+        <button class="sp-btn" id="bminus">−</button>
+        <div class="sp-num" id="pnum">2</div>
+        <button class="sp-btn" id="bplus">+</button>
+      </div>
+    </div>
+    <div class="ctrl-hint">食材用量将按 <b id="phint">2 人份</b> 自动换算</div>
+  </div>
+
+  <!-- 生成按钮 -->
+  <button class="gen-btn" id="genbtn">
+    <span style="font-size:22px">🌟</span>
+    <span>生成今日菜谱</span>
+    <span style="font-size:22px">🍚</span>
+  </button>
+
+  <!-- Loading -->
+  <div class="loading" id="loading">
+    <div class="load-ems">
+      <span class="le">🥄</span><span class="le">🔥</span><span class="le">🍲</span>
+    </div>
+    <div class="load-txt" id="ltxt">大厨正在构思今日菜单…</div>
+  </div>
+
+  <!-- 错误 -->
+  <div class="errbox" id="errbox"></div>
+
+  <!-- 菜谱内容 -->
+  <div id="recipe"></div>
+</div>
+
+<!-- 底部固定操作栏（生成后出现） -->
+<div class="bottom-bar hidden" id="bottom-bar">
+  <div class="bottom-bar-inner">
+    <button class="act a-share" id="sbtn">📤 生成分享图</button>
+    <button class="act a-regen" id="rbtn">🔄 换一批菜</button>
+  </div>
+</div>
+
+<!-- 截图遮罩 -->
+<div class="share-overlay" id="share-overlay">
+  <div class="share-spinner"></div>
+  <div class="share-overlay-txt">正在生成分享图片…</div>
+</div>
+
+<!-- Toast -->
+<div class="toast-el" id="toast"></div>
+
+<script>
+(function(){
+
+var API_KEY = 'sk-d88f4e80680e48faa9d1036244c06a3e';
+
+var SEASONS = {
+  spring:{label:'春季',emoji:'🌸',parade:['🌱','🌸','🫛','🥬','🌿','🍃','✨'],ing:'香椿、春笋、豌豆苗、菠菜、荠菜、韭菜'},
+  summer:{label:'夏季',emoji:'☀️',parade:['🌽','🍅','🥒','🍆','🌶️','💧','🫐'],ing:'丝瓜、茄子、豇豆、苦瓜、黄瓜、番茄'},
+  autumn:{label:'秋季',emoji:'🍂',parade:['🍄','🌰','🎃','🥕','🍠','🍁','🌾'],ing:'莲藕、山药、南瓜、板栗、秋葵、白菜'},
+  winter:{label:'冬季',emoji:'❄️',parade:['🥕','🧅','🥦','❄️','🍲','🫚','🔥'],ing:'白萝卜、大白菜、菠菜、红薯、冬瓜、韭黄'}
+};
+
+var DECO = { meat:'🧄\n🌶️', veg:'🌿\n✨', soup:'💧\n♨️', misc:'🍴\n🥢' };
+var LMSGS = ['大厨正在构思今日菜单…','选取时令新鲜食材中…','荤素搭配，精心调味…','马上好了，先洗手 🙌'];
+
+var persons = 2;
+var curMenu = null;
+var ltimer = null;
+var lti = 0;
+var regenCount = 0;
+var lastMeat = '';
+
+/* ── 工具函数 ── */
+function getSeason(){
+  var m = new Date().getMonth()+1;
+  if(m>=3&&m<=5) return SEASONS.spring;
+  if(m>=6&&m<=8) return SEASONS.summer;
+  if(m>=9&&m<=11) return SEASONS.autumn;
+  return SEASONS.winter;
+}
+
+function fmtDate(d){
+  var w=['日','一','二','三','四','五','六'];
+  return d.getFullYear()+'年'+(d.getMonth()+1)+'月'+d.getDate()+'日 · 周'+w[d.getDay()];
+}
+
+function todayKey(){
+  var d=new Date();
+  return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();
+}
+
+function rand(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+function typeKey(t){
+  t=t||'';
+  if(['荤菜','肉类','禽类','海鲜'].some(function(k){return t.indexOf(k)>=0;})) return 'meat';
+  if(['素菜','蔬菜','豆腐','菌菇'].some(function(k){return t.indexOf(k)>=0;})) return 'veg';
+  if(['汤','羹','粥'].some(function(k){return t.indexOf(k)>=0;})) return 'soup';
+  return 'misc';
+}
+
+function chipCls(t){ return {meat:'cm',veg:'cv',soup:'cs',misc:'cc'}[typeKey(t)]||'cc'; }
+
+function scaleAmt(amount, unit, p){
+  var v = amount * p;
+  if(unit==='g'){ return v>=1000 ? (v/1000).toFixed(1)+'kg' : Math.round(v)+'g'; }
+  if(unit==='ml'){ return v>=1000 ? (v/1000).toFixed(1)+'L' : Math.round(v)+'ml'; }
+  if(unit==='克'){ return Math.round(v)+'克'; }
+  if(unit==='毫升'){ return Math.round(v)+'毫升'; }
+  if('个条块片颗只根张朵把'.indexOf(unit)>=0){ return Math.ceil(v)+unit; }
+  if('勺汤匙茶匙大勺小勺'.indexOf(unit)>=0){ return v.toFixed(1)+unit; }
+  if(!unit||unit==='适量'||unit==='少许'){ return unit||'适量'; }
+  return Math.round(v)+unit;
+}
+
+function esc(s){
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function showToast(msg){
+  var el=document.getElementById('toast');
+  el.textContent=msg; el.classList.add('on');
+  setTimeout(function(){ el.classList.remove('on'); }, 2800);
+}
+
+/* ── 人数控制 ── */
+function updPersons(){
+  document.getElementById('pnum').textContent = persons;
+  document.getElementById('phint').textContent = persons+' 人份';
+  if(curMenu) renderMenu(curMenu);
+}
+
+/* ── 渲染菜单 ── */
+function renderMenu(menu){
+  curMenu = menu;
+  var s = getSeason();
+  var area = document.getElementById('recipe');
+  var h = '';
+
+  h += '<div class="menu-name">'+esc(menu.menu_name||'今日精选')+'</div>';
+  h += '<div class="meta-row">';
+  h += '<span class="pill pa">共 '+(menu.dishes||[]).length+' 道</span>';
+  h += '<span class="pill pg">'+s.emoji+' '+s.label+'</span>';
+  h += '<span class="pill pb">👥 '+persons+'人份</span>';
+  h += '<span class="pill pp">🌟 千问</span>';
+  h += '</div>';
+
+  (menu.dishes||[]).forEach(function(dish, idx){
+    var dk = typeKey(dish.type);
+    var dc = DECO[dk]||DECO.misc;
+    var ings = dish.ingredients_per_person || dish.ingredients || [];
+
+    var ih = '';
+    if(ings.length){
+      ih += '<div class="ings"><div class="shdr">🛒 食材（'+persons+'人份）</div><div class="igrid">';
+      ings.forEach(function(i){
+        var amt = (typeof i.amount==='number'&&i.amount>0) ? scaleAmt(i.amount,i.unit||'',persons) : (i.amount||'适量');
+        ih += '<div class="irow"><span class="iname">'+esc(i.name)+'</span><span class="iamt">'+esc(String(amt))+'</span></div>';
+      });
+      ih += '</div></div>';
+    }
+
+    var sh = (dish.steps||[]).map(function(st,si){
+      return '<div class="srow"><div class="snum">'+(si+1)+'</div><div class="stxt">'+esc(st)+'</div></div>';
+    }).join('');
+
+    var th = dish.tip ? '<div class="tip"><span style="font-size:15px">💡</span><span>'+esc(dish.tip)+'</span></div>' : '';
+
+    h += '<div class="dish">';
+    h += '<div class="ebanner">';
+    h += '<span class="dl">'+dc+'</span>';
+    h += '<span class="big-e" style="animation-delay:'+(idx*0.4)+'s">'+(dish.emoji||'🍽️')+'</span>';
+    h += '<span class="dr">'+dc+'</span>';
+    h += '</div>';
+    h += '<div class="nbar"><div><div class="dname">'+esc(dish.name)+'</div></div>';
+    h += '<div class="chips">';
+    h += '<span class="chip '+chipCls(dish.type)+'">'+(dish.type||'家常菜')+'</span>';
+    if(dish.difficulty) h += '<span class="chip cx">'+esc(dish.difficulty)+'</span>';
+    if(dish.time) h += '<span class="chip cx">⏱'+esc(dish.time)+'</span>';
+    h += '</div></div>';
+    h += ih;
+    h += '<div class="steps"><div class="shdr">👨‍🍳 做法步骤</div>'+sh+th+'</div>';
+    h += '</div>';
+  });
+
+  area.innerHTML = h;
+  area.style.display = 'block';
+  // 显示底部操作栏
+  document.getElementById('bottom-bar').classList.remove('hidden');
+}
+
+/* ── 生成菜单 ── */
+function genMenu(force){
+  var btn = document.getElementById('genbtn');
+  btn.disabled = true;
+  document.getElementById('recipe').style.display = 'none';
+  document.getElementById('errbox').style.display = 'none';
+  document.getElementById('loading').style.display = 'block';
+  document.getElementById('bottom-bar').classList.add('hidden');
+
+  lti = 0;
+  if(ltimer) clearInterval(ltimer);
+  ltimer = setInterval(function(){
+    lti = (lti+1) % LMSGS.length;
+    var el = document.getElementById('ltxt');
+    if(el) el.textContent = LMSGS[lti];
+  }, 2000);
+
+  var s = getSeason();
+  var meatOptions = ['猪','鸡','牛','鱼','虾','羊','鸭','蟹'];
+  var styleOptions = ['家常','川','粤','湘','东北','江浙','鲁','闽'];
+
+  // 每次都真随机，换一批时排除上次肉类
+  var thisMeat = rand(meatOptions);
+  if(force && lastMeat){
+    var filtered = meatOptions.filter(function(m){ return m!==lastMeat; });
+    thisMeat = rand(filtered);
+  }
+  lastMeat = thisMeat;
+
+  var thisStyle = rand(styleOptions);
+  var ingList = s.ing.split('、');
+  var thisSeasonalIng = rand(ingList);
+
+  var dishCount = persons <= 4 ? persons : persons + 1;
+  dishCount = Math.max(2, Math.min(8, dishCount));
+
+  var prompt =
+    '你是专业'+thisStyle+'风家常菜厨师。今天'+todayKey()+'，'+s.label+'。\n'+
+    '今晚共'+persons+'个人吃饭，请生成'+dishCount+'道菜。\n'+
+    '\n【出菜规则】\n'+
+    '- 荤素搭配，至少1道荤菜、1道素菜、1道汤\n'+
+    '- 本次荤菜主食材必须用【'+thisMeat+'】，禁止用其他肉类\n'+
+    '- 只有1道菜用时令食材，本次指定【'+thisSeasonalIng+'】，其余菜禁止用时令食材\n'+
+    '- 本次风格偏向【'+thisStyle+'风味】\n'+
+    '- 人数≥5时可加1道凉菜或豆腐菜\n'+
+    '\n【格式要求】\n'+
+    '- ingredients_per_person 每项 amount 是每人份数字，unit 是单位(g/ml/个/条/片/颗/勺)\n'+
+    '- 每道菜选最贴切1个食物emoji\n'+
+    '- 随机标识：'+Date.now()+'\n'+
+    '\n只返回JSON不要其他文字：\n'+
+    '{"menu_name":"今日xxx'+thisStyle+'风味","dishes":[{"name":"菜名","type":"荤菜","emoji":"🍽️","difficulty":"简单","time":"20分钟","ingredients_per_person":[{"name":"食材","amount":150,"unit":"g"}],"steps":["步骤1","步骤2","步骤3"],"tip":"小贴士"}]}';
+
+  fetch('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+API_KEY},
+    body:JSON.stringify({
+      model:'qwen-plus', max_tokens:2500,
+      temperature: force ? 1.0 : 0.8,
+      messages:[{role:'user',content:prompt}]
+    })
+  })
+  .then(function(res){ return res.json().then(function(d){return{ok:res.ok,d:d};}); })
+  .then(function(r){
+    clearInterval(ltimer);
+    document.getElementById('loading').style.display = 'none';
+    btn.disabled = false;
+    if(!r.ok) throw new Error((r.d.error&&r.d.error.message)||'请求失败');
+    var raw = (r.d.choices&&r.d.choices[0]&&r.d.choices[0].message&&r.d.choices[0].message.content)||'';
+    var clean = raw.replace(/```json\s*/g,'').replace(/```\s*/g,'').trim();
+    var i0=clean.indexOf('{'), i1=clean.lastIndexOf('}');
+    if(i0<0||i1<0) throw new Error('返回格式异常，请重试');
+    renderMenu(JSON.parse(clean.slice(i0,i1+1)));
+    // 生成后平滑滚动到菜单
+    setTimeout(function(){
+      document.getElementById('recipe').scrollIntoView({behavior:'smooth', block:'start'});
+    }, 100);
+  })
+  .catch(function(err){
+    clearInterval(ltimer);
+    document.getElementById('loading').style.display = 'none';
+    btn.disabled = false;
+    var eb = document.getElementById('errbox');
+    eb.innerHTML = '😅 出了点小问题<br><small style="opacity:.7">'+esc(err.message)+'</small>';
+    eb.style.display = 'block';
+  });
+}
+
+/* ── 分享：截图 → 复制/保存 ── */
+function doShare(){
+  var area = document.getElementById('recipe');
+  if(!area||!curMenu){ showToast('请先生成菜谱'); return; }
+
+  var overlay = document.getElementById('share-overlay');
+  overlay.classList.add('show');
+
+  // 截图时临时去掉旋转、阴影偏移，避免裁切
+  var dishes = area.querySelectorAll('.dish');
+  dishes.forEach(function(d){ d.style.transform='none'; d.style.boxShadow='none'; });
+
+  html2canvas(area, {
+    backgroundColor:'#FEFAF3',
+    scale: window.devicePixelRatio || 2,
+    useCORS: true,
+    scrollX: 0,
+    scrollY: -window.scrollY,
+    windowWidth: document.documentElement.scrollWidth,
+    windowHeight: document.documentElement.scrollHeight
+  }).then(function(canvas){
+    // 恢复样式
+    dishes.forEach(function(d){ d.style.transform=''; d.style.boxShadow=''; });
+    overlay.classList.remove('show');
+
+    canvas.toBlob(function(blob){
+      if(!blob){ showToast('❌ 图片生成失败'); return; }
+
+      // ① 支持 Clipboard API（Chrome 桌面、部分安卓）→ 直接复制到剪贴板
+      if(navigator.clipboard && window.ClipboardItem){
+        navigator.clipboard.write([new ClipboardItem({'image/png':blob})])
+          .then(function(){ showToast('✅ 图片已复制，粘贴发给好友！'); })
+          .catch(function(){ downloadImage(canvas); });
+      } else {
+        // ② 降级 → 长按保存 / 下载
+        downloadImage(canvas);
+      }
+    }, 'image/png');
+
+  }).catch(function(err){
+    dishes.forEach(function(d){ d.style.transform=''; d.style.boxShadow=''; });
+    overlay.classList.remove('show');
+    showToast('截图失败：'+err.message);
+  });
+}
+
+function downloadImage(canvas){
+  // 微信内置浏览器不支持 <a> download，改用新窗口打开图片让用户长按保存
+  var dataUrl = canvas.toDataURL('image/png');
+  var isWechat = /MicroMessenger/i.test(navigator.userAgent);
+  if(isWechat){
+    // 微信内：在新页面展示图片，提示长按保存
+    var w = window.open('');
+    if(w){
+      w.document.write(
+        '<!DOCTYPE html><html><head><meta charset="UTF-8">'
+        +'<meta name="viewport" content="width=device-width,initial-scale=1">'
+        +'<title>长按图片保存</title>'
+        +'<style>body{margin:0;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh}'
+        +'p{color:#fff;font-size:15px;margin:12px;text-align:center}'
+        +'img{max-width:100%;display:block}'
+        +'</style></head><body>'
+        +'<p>👆 长按图片 → 保存到相册，然后发给好友</p>'
+        +'<img src="'+dataUrl+'">'
+        +'</body></html>'
+      );
+    } else {
+      showToast('请允许弹窗以保存图片');
+    }
+  } else {
+    // 普通浏览器：直接下载
+    var a = document.createElement('a');
+    a.download = '今日晚餐_'+todayKey()+'.png';
+    a.href = dataUrl;
+    a.click();
+    showToast('📥 图片已保存！');
+  }
+}
+
+/* ── 初始化 ── */
+try{
+  var d = new Date();
+  document.getElementById('dline').textContent = fmtDate(d);
+  var s = getSeason();
+  document.getElementById('stag').textContent = s.emoji+' '+s.label;
+  var eps = document.querySelectorAll('#parade .ep');
+  s.parade.forEach(function(e,i){ if(eps[i]) eps[i].textContent=e; });
+
+  document.getElementById('bminus').addEventListener('click', function(){
+    if(persons>1){ persons--; updPersons(); }
+  });
+  document.getElementById('bplus').addEventListener('click', function(){
+    if(persons<10){ persons++; updPersons(); }
+  });
+  document.getElementById('genbtn').addEventListener('click', function(){ genMenu(false); });
+  document.getElementById('sbtn').addEventListener('click', doShare);
+  document.getElementById('rbtn').addEventListener('click', function(){ regenCount++; genMenu(true); });
+
+} catch(e){
+  document.getElementById('errbox').textContent = '初始化错误: '+e.message;
+  document.getElementById('errbox').style.display = 'block';
+}
+
+})();
+</script>
+</body>
+</html>
